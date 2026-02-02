@@ -10,11 +10,44 @@ export class JobStore {
 
     // Get execution time
     const execTime = job.schedule;
+
+    // Add to scheduled jobs
+    if(!this.scheduled.has(execTime)) {
+        this.scheduled.set(execTime, [])
+    }
+    this.scheduled.get(execTime).push(job.id);
+
+    return job.id;
   }
   
   getDueJobs(now) {
-    // TODO: Implement me  
-    console.log('Need to implement getDueJobs');
-    return [];
+    const dueJobs = [];
+    
+    // Find all scheduled times <= now
+    for (const [execTime, jobIds] of this.scheduled.entries()) {
+      if (execTime <= now) {
+        // Get the actual Job objects
+        for (const jobId of jobIds) {
+          const job = this.jobs.get(jobId);
+          if (job && job.status === 'pending') {
+            dueJobs.push(job);
+          }
+        }
+        // Remove this time entry since we've processed it
+        this.scheduled.delete(execTime);
+      }
+    }
+    return dueJobs;
+  }
+
+  updateJobStatus(jobId, status) {
+    const job = this.jobs.get(jobId);
+    if (job) {
+      job.status = status;
+    }
+  }
+  
+  removeJob(jobId) {
+    this.jobs.delete(jobId);
   }
 }
