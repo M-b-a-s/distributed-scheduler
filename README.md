@@ -7,4 +7,4 @@ My goal is to build a supercharged, industrial-strength cron system that can:
 - Guarantee jobs run exactly once
 - Handle system restarts without loosing jobs
 
-Analogy: If setTimeout() is a kitchen timer, our scheduler is Google Calendar's notification system for the entire world.
+Analogy: If setTimeout() is a kitchen timer, my scheduler is Google Calendar's notification system for the entire world.

@@ -1,3 +1,5 @@
+import { Job } from './job.js';
+
 export class Scheduler {
   constructor(store) {
     this.store = store;
