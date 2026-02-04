@@ -5,6 +5,21 @@ export class JobStore {
   }
   
   addJob(job) {
+    const existingJob = this.jobs.get(job.id);
+    if (existingJob) {
+      // Clean old scheduled entry
+      const oldExecTime = existingJob.schedule;
+      if (this.scheduled.has(oldExecTime)) {
+        const jobIds = this.scheduled.get(oldExecTime);
+        const index = jobIds.indexOf(job.id);
+        if (index !== -1) {
+          jobIds.splice(index, 1);
+          if (jobIds.length === 0) {
+            this.scheduled.delete(oldExecTime);
+          }
+        }
+      }
+    }
     // Store the job
     this.jobs.set(job.id, job);
 

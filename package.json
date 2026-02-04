@@ -1,5 +1,6 @@
 {
   "dependencies": {
+    "redis": "^5.10.0",
     "uuid": "^13.0.0"
   },
   "name": "distributed-scheduler",

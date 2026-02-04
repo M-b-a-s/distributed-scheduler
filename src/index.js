@@ -23,4 +23,4 @@ store.addJob(testJob);
 // Test 3: Start scheduler
 scheduler.start();
 
-console.log('Basic setup complete. Now implement the TODOs.');
+console.log('Basic setup complete');
