@@ -54,14 +54,11 @@ export class Scheduler {
       this.store.updateJobStatus(job.id, 'running');
       console.log(`[${new Date().toISOString()}] Executing job ${job.id}`);
       
-      // Execute the handler
       await job.handler(job.data);
       
-      // Update status to completed
       this.store.updateJobStatus(job.id, 'completed');
       console.log(`[${new Date().toISOString()}] Job ${job.id} completed`);
       
-      // Remove from store (optional - could keep for history)
       this.store.removeJob(job.id);
       
     } catch (error) {

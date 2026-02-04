@@ -1,26 +1,30 @@
-import { Job } from './job.js';
 import { JobStore } from './store.js';
 import { Scheduler } from './scheduler.js';
 
-console.log('Testing basic setup...');
+async function main() {
+  try {
+    const store = new JobStore();
+    await store.init(); // Recover jobs from Redis
 
-const store = new JobStore();
-const scheduler = new Scheduler(store);
+    const scheduler = new Scheduler(store);
+    scheduler.start();
 
-// Test 1: Can we create a job?
-const testJob = new Job(
-  'test-1',
-  Date.now() + 3000,  // 3 seconds from now
-  () => console.log('Job executed!'),
-  { foo: 'bar' }
-);
+    // Graceful shutdown handling
+    process.on('SIGINT', () => {
+      console.log('Shutting down scheduler...');
+      scheduler.stop();
+      process.exit(0);
+    });
 
-console.log('Job created:', testJob.id, testJob.status);
+    process.on('SIGTERM', () => {
+      console.log('Shutting down scheduler...');
+      scheduler.stop();
+      process.exit(0);
+    });
+  } catch (error) {
+    console.error('Failed to start scheduler:', error);
+    process.exit(1);
+  }
+}
 
-// Test 2: Can we add to store?
-store.addJob(testJob);
-
-// Test 3: Start scheduler
-scheduler.start();
-
-console.log('Basic setup complete');
+main();
