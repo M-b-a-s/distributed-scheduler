@@ -1,4 +1,4 @@
-import { PersistentStore } from './persistentStore.js';
+import { PersistentStore } from '../persistence/persistentStore.js';
 
 export class JobStore {
   constructor(handlerRegistry) {

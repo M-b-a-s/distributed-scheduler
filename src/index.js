@@ -1,6 +1,6 @@
-import { JobStore } from './store.js';
-import { Scheduler } from './scheduler.js';
-import { defaultRegistry } from './handlerRegistry.js';
+import { JobStore } from './store/jobStore.js';
+import { Scheduler } from './scheduler/scheduler.js';
+import { defaultRegistry } from './registry/handlerRegistry.js';
 
 async function main() {
   try {

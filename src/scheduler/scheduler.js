@@ -1,4 +1,4 @@
-import { Job } from './job.js';
+import { Job } from '../models/job.js';
 
 export class Scheduler {
   constructor(store) {

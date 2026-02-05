@@ -1,5 +1,5 @@
 import { createClient } from 'redis';
-import { Job } from './job.js';
+import { Job } from '../models/job.js';
 
 const client = createClient({ url: 'redis://localhost:6379' });
 client.connect();
@@ -11,6 +11,19 @@ function flattenToPairs(obj) {
     pairs.push(key, value);
   }
   return pairs;
+}
+
+// Safe JSON parse with fallback
+function safeJsonParse(str, fallback = null) {
+  if (str === undefined || str === null || str === '') {
+    return fallback;
+  }
+  try {
+    return JSON.parse(str);
+  } catch (e) {
+    console.warn(`Failed to parse JSON: ${str}`);
+    return fallback;
+  }
 }
 
 export class PersistentStore {
@@ -48,14 +61,20 @@ export class PersistentStore {
     for (const key of jobIds) {
       const data = await client.hGetAll(key);
       
+      // Skip if no data or missing required fields
+      if (!data || !data.id || !data.schedule) {
+        console.warn(`Skipping invalid job data: ${key}`);
+        continue;
+      }
+      
       const job = Job.fromJSON({
         id: data.id,
         schedule: parseInt(data.schedule),
-        handlerName: data.handlerName,
-        data: JSON.parse(data.data),
-        status: data.status,
-        createdAt: parseInt(data.createdAt),
-        retryStrategy: data.retryStrategy ? JSON.parse(data.retryStrategy) : null,
+        handlerName: data.handlerName || 'defaultHandler',
+        data: safeJsonParse(data.data, {}),
+        status: data.status || 'pending',
+        createdAt: parseInt(data.createdAt) || Date.now(),
+        retryStrategy: safeJsonParse(data.retryStrategy, null),
         recurring: data.recurring === 'true',
         cronExpression: data.cronExpression || null,
         intervalMs: data.intervalMs ? parseInt(data.intervalMs) : null,
@@ -74,24 +93,28 @@ export class PersistentStore {
     const dueJobs = [];
     for (const id of dueIds) {
       const data = await client.hGetAll(`job:${id}`);
-      if (data.status === 'pending') {
-        const job = Job.fromJSON({
-          id: data.id,
-          schedule: parseInt(data.schedule),
-          handlerName: data.handlerName,
-          data: JSON.parse(data.data),
-          status: data.status,
-          createdAt: parseInt(data.createdAt),
-          retryStrategy: data.retryStrategy ? JSON.parse(data.retryStrategy) : null,
-          recurring: data.recurring === 'true',
-          cronExpression: data.cronExpression || null,
-          intervalMs: data.intervalMs ? parseInt(data.intervalMs) : null,
-          executedAt: data.executedAt ? parseInt(data.executedAt) : null,
-          lastError: data.lastError || null,
-          retryCount: parseInt(data.retryCount) || 0
-        });
-        dueJobs.push(job);
+      
+      // Skip if no data or not pending
+      if (!data || data.status !== 'pending') {
+        continue;
       }
+      
+      const job = Job.fromJSON({
+        id: data.id,
+        schedule: parseInt(data.schedule),
+        handlerName: data.handlerName || 'defaultHandler',
+        data: safeJsonParse(data.data, {}),
+        status: data.status,
+        createdAt: parseInt(data.createdAt) || Date.now(),
+        retryStrategy: safeJsonParse(data.retryStrategy, null),
+        recurring: data.recurring === 'true',
+        cronExpression: data.cronExpression || null,
+        intervalMs: data.intervalMs ? parseInt(data.intervalMs) : null,
+        executedAt: data.executedAt ? parseInt(data.executedAt) : null,
+        lastError: data.lastError || null,
+        retryCount: parseInt(data.retryCount) || 0
+      });
+      dueJobs.push(job);
     }
     return dueJobs;
   }

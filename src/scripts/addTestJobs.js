@@ -1,7 +1,7 @@
 // add-test-jobs.js
-import { JobStore } from './store.js';
-import { Job } from './job.js';
-import { defaultRegistry } from './handlerRegistry.js';
+import { JobStore } from '../store/jobStore.js';
+import { Job } from '../models/job.js';
+import { defaultRegistry } from '../registry/handlerRegistry.js';
 
 const store = new JobStore(defaultRegistry);
 await store.init();
