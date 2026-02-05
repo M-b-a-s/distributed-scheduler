@@ -1,52 +1,53 @@
 export class Job {
-  constructor(id, schedule, handler, data = {}, options = {}) {
+  constructor(id, schedule, handlerName, data = {}, options = {}) {
     this.id = id;
     this.schedule = schedule;
-    this.handler = handler;
+    this.handlerName = handlerName;  // Only store handler NAME (string), not function
     this.data = data;
     this.status = 'pending';
     this.createdAt = Date.now();
     
-    // For persistence
-    this.handlerType = options.handlerType || 'function';
-    this.handlerName = options.handlerName || 'anonymous';
-    
-    // For retry strategy (nested object)
+    // Options for persistence
     this.retryStrategy = options.retryStrategy || null;
     
     // For recurring jobs (future)
     this.recurring = options.recurring || false;
     this.cronExpression = options.cronExpression || null;
     this.intervalMs = options.intervalMs || null;
+    
+    // Execution history
+    this.executedAt = null;
+    this.lastError = null;
+    this.retryCount = 0;
   }
   
-  // Convert to serializable object (without function)
+  // Convert to serializable object (pure data, no functions)
   toJSON() {
     return {
       id: this.id,
       schedule: this.schedule instanceof Date ? this.schedule.getTime() : this.schedule,
+      handlerName: this.handlerName,
       data: this.data,
       status: this.status,
       createdAt: this.createdAt,
-      handlerType: this.handlerType,
-      handlerName: this.handlerName,
       retryStrategy: this.retryStrategy,
       recurring: this.recurring,
       cronExpression: this.cronExpression,
-      intervalMs: this.intervalMs
+      intervalMs: this.intervalMs,
+      executedAt: this.executedAt,
+      lastError: this.lastError,
+      retryCount: this.retryCount
     };
   }
   
-  // Static method to recreate from JSON
-  static fromJSON(json, handler = null) {
+  // Static method to recreate from JSON (pure data)
+  static fromJSON(json) {
     const job = new Job(
       json.id,
       new Date(json.schedule),
-      handler,
+      json.handlerName,
       json.data,
       {
-        handlerType: json.handlerType,
-        handlerName: json.handlerName,
         retryStrategy: json.retryStrategy,
         recurring: json.recurring,
         cronExpression: json.cronExpression,
@@ -56,6 +57,9 @@ export class Job {
     
     job.status = json.status;
     job.createdAt = json.createdAt;
+    job.executedAt = json.executedAt;
+    job.lastError = json.lastError;
+    job.retryCount = json.retryCount || 0;
     
     return job;
   }

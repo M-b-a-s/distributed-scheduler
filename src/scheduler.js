@@ -52,35 +52,48 @@ export class Scheduler {
     try {
       // Update status to running
       this.store.updateJobStatus(job.id, 'running');
-      console.log(`[${new Date().toISOString()}] Executing job ${job.id}`);
+      console.log(`[${new Date().toISOString()}] Executing job ${job.id} (handler: ${job.handlerName})`);
       
-      await job.handler(job.data);
+      // Get handler function from registry at runtime
+      const handler = this.store.getHandlerForJob(job);
       
-      this.store.updateJobStatus(job.id, 'completed');
+      // Execute the handler
+      await handler(job.data);
+      
+      // Update execution status
+      const executedAt = Date.now();
+      await this.store.updateJobExecution(job.id, executedAt, null, job.retryCount);
       console.log(`[${new Date().toISOString()}] Job ${job.id} completed`);
       
-      this.store.removeJob(job.id);
+      // Remove completed job
+      await this.store.removeJob(job.id);
       
     } catch (error) {
       console.error(`[${new Date().toISOString()}] Job ${job.id} failed:`, error);
+      job.lastError = error.message;
+      job.retryCount++;
+      
+      // Update failure status
+      const executedAt = Date.now();
+      await this.store.updateJobExecution(job.id, executedAt, error.message, job.retryCount);
       this.store.updateJobStatus(job.id, 'failed');
     }
   }
   
-  scheduleJob(handler, delayMs, data = {}) {
+  scheduleJob(handlerName, delayMs, data = {}) {
     // Generate unique ID
     const jobId = `job-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
     
     // Calculate schedule time
     const scheduleTime = Date.now() + delayMs;
     
-    // Create job
-    const job = new Job(jobId, scheduleTime, handler, data);
+    // Create job with handler NAME (string), not function
+    const job = new Job(jobId, scheduleTime, handlerName, data);
     
     // Add to store
     this.store.addJob(job);
     
-    console.log(`Scheduled job ${jobId} to run at ${new Date(scheduleTime).toISOString()}`);
+    console.log(`Scheduled job ${jobId} (handler: ${handlerName}) to run at ${new Date(scheduleTime).toISOString()}`);
     
     return jobId;
   }

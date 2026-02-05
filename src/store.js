@@ -1,9 +1,10 @@
 import { PersistentStore } from './persistentStore.js';
 
 export class JobStore {
-  constructor() {
+  constructor(handlerRegistry) {
     this.jobs = new Map();
     this.scheduled = new Map();
+    this.handlerRegistry = handlerRegistry;  // Reference to handler registry
     this.persistentStore = new PersistentStore();
   }
 
@@ -48,7 +49,7 @@ export class JobStore {
     }
     this.scheduled.get(execTime).push(job.id);
 
-    // Mirror to Redis
+    // Mirror to Redis (only serializable data, no functions)
     await this.persistentStore.addJob(job);
 
     return job.id;
@@ -83,6 +84,18 @@ export class JobStore {
     }
   }
   
+  async updateJobExecution(jobId, executedAt, lastError = null, retryCount = 0) {
+    const job = this.jobs.get(jobId);
+    if (job) {
+      job.status = 'completed';
+      job.executedAt = executedAt;
+      job.lastError = lastError;
+      job.retryCount = retryCount;
+      // Mirror to Redis
+      await this.persistentStore.updateJobExecution(jobId, executedAt, lastError, retryCount);
+    }
+  }
+  
   async removeJob(jobId) {
     this.jobs.delete(jobId);
     
@@ -100,5 +113,10 @@ export class JobStore {
     
     // Mirror to Redis
     await this.persistentStore.removeJob(jobId);
+  }
+  
+  // Get handler function from registry for a job
+  getHandlerForJob(job) {
+    return this.handlerRegistry.get(job.handlerName);
   }
 }

@@ -1,13 +1,16 @@
 import { JobStore } from './store.js';
 import { Scheduler } from './scheduler.js';
+import { defaultRegistry } from './handlerRegistry.js';
 
 async function main() {
   try {
-    const store = new JobStore();
+    // Initialize store with HandlerRegistry (functions stay in memory)
+    const store = new JobStore(defaultRegistry);
     await store.init(); // Recover jobs from Redis
 
     const scheduler = new Scheduler(store);
     scheduler.start();
+    console.log('Scheduler started with handler registry:', defaultRegistry.keys());
 
     // Graceful shutdown handling
     process.on('SIGINT', () => {
