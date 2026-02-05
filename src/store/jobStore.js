@@ -1,5 +1,10 @@
 import { PersistentStore } from '../persistence/persistentStore.js';
 
+// Helper to format timestamp for display
+function formatTime(timestamp) {
+  return new Date(timestamp).toLocaleString();
+}
+
 export class JobStore {
   constructor(handlerRegistry) {
     this.jobs = new Map();
@@ -13,15 +18,40 @@ export class JobStore {
     for (const job of loadedJobs) {
       this.jobs.set(job.id, job);
       
+      // Ensure schedule is a Date object
+      if (!(job.schedule instanceof Date)) {
+        job.schedule = new Date(job.schedule);
+      }
+      
       const execTime = job.schedule.getTime();
       if (!this.scheduled.has(execTime)) {
         this.scheduled.set(execTime, []);
       }
       this.scheduled.get(execTime).push(job.id);
     }
+    
+    // Log scheduled jobs summary
+    console.log(`\n=== SCHEDULED JOBS (${loadedJobs.length} total) ===`);
+    for (const [execTime, jobIds] of this.scheduled.entries()) {
+      const readableTime = formatTime(execTime);
+      const now = Date.now();
+      const isPast = execTime <= now;
+      const status = isPast ? 'DUE NOW' : 'PENDING';
+      console.log(`[${status}] ${readableTime} (${execTime}) - ${jobIds.length} job(s): ${jobIds.join(', ')}`);
+    }
+    const nextRun = this.scheduled.keys().next().value;
+    if (nextRun) {
+      const msUntil = nextRun - Date.now();
+      console.log(`\nNext job runs in: ${Math.max(0, msUntil / 1000).toFixed(1)} seconds\n`);
+    }
   }
   
   async addJob(job) {
+    // Ensure schedule is a Date object
+    if (!(job.schedule instanceof Date)) {
+      job.schedule = new Date(job.schedule);
+    }
+    
     const existingJob = this.jobs.get(job.id);
     if (existingJob) {
       // Clean old scheduled entry
@@ -58,9 +88,13 @@ export class JobStore {
   getDueJobs(now) {
     const dueJobs = [];
     
+    // now is already a number from Date.now(), not a Date object
+    // So we compare directly without calling .getTime()
+    const nowTime = typeof now === 'number' ? now : now.getTime();
+    
     // Find all scheduled times <= now
     for (const [execTime, jobIds] of this.scheduled.entries()) {
-      if (execTime <= now.getTime()) {
+      if (execTime <= nowTime) {
         // Get the actual Job objects
         for (const jobId of jobIds) {
           const job = this.jobs.get(jobId);

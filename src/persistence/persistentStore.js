@@ -4,15 +4,6 @@ import { Job } from '../models/job.js';
 const client = createClient({ url: 'redis://localhost:6379' });
 client.connect();
 
-// Helper to flatten object to field/value pairs for hSet
-function flattenToPairs(obj) {
-  const pairs = [];
-  for (const [key, value] of Object.entries(obj)) {
-    pairs.push(key, value);
-  }
-  return pairs;
-}
-
 // Safe JSON parse with fallback
 function safeJsonParse(str, fallback = null) {
   if (str === undefined || str === null || str === '') {
@@ -21,7 +12,7 @@ function safeJsonParse(str, fallback = null) {
   try {
     return JSON.parse(str);
   } catch (e) {
-    console.warn(`Failed to parse JSON: ${str}`);
+    console.warn(`[PersistentStore] Failed to parse JSON: ${str}`);
     return fallback;
   }
 }
@@ -31,8 +22,8 @@ export class PersistentStore {
     const jobKey = `job:${job.id}`;
     const json = job.toJSON();
     
-    // Build flat field/value pairs for Redis hash
-    const hashData = {
+    // Build the job data object
+    const jobData = {
       id: json.id,
       schedule: json.schedule.toString(),
       handlerName: json.handlerName,
@@ -48,22 +39,34 @@ export class PersistentStore {
       retryCount: (json.retryCount || 0).toString()
     };
     
-    // Use hSet with flat field/value pairs
-    await client.multi()
-      .hSet(jobKey, ...flattenToPairs(hashData))
-      .zAdd('scheduled_jobs', { score: json.schedule, value: job.id })
-      .exec();
+    // Use HMSET to store all fields at once (more reliable than hSet with spread)
+    const pipeline = client.multi();
+    
+    // Add all fields using hSet one by one in the pipeline
+    for (const [field, value] of Object.entries(jobData)) {
+      pipeline.hSet(jobKey, field, value);
+    }
+    
+    // Add to sorted set for scheduled jobs
+    pipeline.zAdd('scheduled_jobs', { score: json.schedule, value: job.id });
+    
+    await pipeline.exec();
+    
+    console.log(`[PersistentStore] Saved job ${job.id} with data:`, JSON.stringify(jobData, null, 2));
   }
 
   async getAllJobs() {
     const jobIds = await client.keys('job:*');
+    console.log(`[PersistentStore] Found ${jobIds.length} job keys: ${jobIds}`);
+    
     const jobs = [];
     for (const key of jobIds) {
       const data = await client.hGetAll(key);
+      console.log(`[PersistentStore] Raw data for ${key}:`, JSON.stringify(data));
       
       // Skip if no data or missing required fields
       if (!data || !data.id || !data.schedule) {
-        console.warn(`Skipping invalid job data: ${key}`);
+        console.warn(`[PersistentStore] Skipping invalid job: ${key}, data:`, JSON.stringify(data));
         continue;
       }
       
@@ -83,6 +86,7 @@ export class PersistentStore {
         retryCount: parseInt(data.retryCount) || 0
       });
       
+      console.log(`[PersistentStore] Successfully loaded job: ${job.id}`);
       jobs.push(job);
     }
     return jobs;
@@ -124,14 +128,12 @@ export class PersistentStore {
   }
 
   async updateJobExecution(id, executedAt, lastError = null, retryCount = 0) {
-    const updates = {
+    await client.hSet(`job:${id}`, {
       status: 'completed',
       executedAt: executedAt.toString(),
       lastError: lastError || '',
       retryCount: retryCount.toString()
-    };
-    // Use hSet with flat field/value pairs
-    await client.hSet(`job:${id}`, ...flattenToPairs(updates));
+    });
   }
 
   async removeJob(id) {
