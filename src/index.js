@@ -3,6 +3,9 @@ import { Scheduler } from './scheduler/scheduler.js';
 import { defaultRegistry } from './registry/handlerRegistry.js';
 
 async function main() {
+  console.log('=== DISTRIBUTED SCHEDULER ===');
+  console.log('Starting scheduler service...\n');
+  
   try {
     // Initialize store with HandlerRegistry (functions stay in memory)
     const store = new JobStore(defaultRegistry);
@@ -10,22 +13,23 @@ async function main() {
 
     const scheduler = new Scheduler(store);
     scheduler.start();
-    console.log('Scheduler started with handler registry:', defaultRegistry.keys());
+    console.log('\nScheduler is running and monitoring for jobs...');
+    console.log('Registered handlers:', defaultRegistry.keys());
 
     // Graceful shutdown handling
     process.on('SIGINT', () => {
-      console.log('Shutting down scheduler...');
+      console.log('\nReceived SIGINT (Ctrl+C)');
       scheduler.stop();
       process.exit(0);
     });
 
     process.on('SIGTERM', () => {
-      console.log('Shutting down scheduler...');
+      console.log('\nReceived SIGTERM');
       scheduler.stop();
       process.exit(0);
     });
   } catch (error) {
-    console.error('Failed to start scheduler:', error);
+    console.error('Failed to start scheduler:', error.message);
     process.exit(1);
   }
 }

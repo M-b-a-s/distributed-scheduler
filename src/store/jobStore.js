@@ -14,7 +14,9 @@ export class JobStore {
   }
 
   async init() {
+    console.log('[JobStore] Initializing...');
     const loadedJobs = await this.persistentStore.getAllJobs();
+    
     for (const job of loadedJobs) {
       this.jobs.set(job.id, job);
       
@@ -32,18 +34,25 @@ export class JobStore {
     
     // Log scheduled jobs summary
     console.log(`\n=== SCHEDULED JOBS (${loadedJobs.length} total) ===`);
+    const now = Date.now();
     for (const [execTime, jobIds] of this.scheduled.entries()) {
       const readableTime = formatTime(execTime);
-      const now = Date.now();
       const isPast = execTime <= now;
       const status = isPast ? 'DUE NOW' : 'PENDING';
-      console.log(`[${status}] ${readableTime} (${execTime}) - ${jobIds.length} job(s): ${jobIds.join(', ')}`);
+      console.log(`[${status}] ${readableTime} - ${jobIds.length} job(s): ${jobIds.join(', ')}`);
     }
+    
     const nextRun = this.scheduled.keys().next().value;
     if (nextRun) {
       const msUntil = nextRun - Date.now();
-      console.log(`\nNext job runs in: ${Math.max(0, msUntil / 1000).toFixed(1)} seconds\n`);
+      if (msUntil > 0) {
+        console.log(`\nNext job runs in: ${(msUntil / 1000).toFixed(1)} seconds\n`);
+      } else {
+        console.log(`\nJobs are due for execution!\n`);
+      }
     }
+    
+    console.log('[JobStore] Initialization complete');
   }
   
   async addJob(job) {
@@ -67,6 +76,7 @@ export class JobStore {
         }
       }
     }
+    
     // Store the job
     this.jobs.set(job.id, job);
 
@@ -75,7 +85,7 @@ export class JobStore {
 
     // Add to scheduled jobs
     if(!this.scheduled.has(execTime)) {
-        this.scheduled.set(execTime, [])
+        this.scheduled.set(execTime, []);
     }
     this.scheduled.get(execTime).push(job.id);
 
@@ -89,7 +99,6 @@ export class JobStore {
     const dueJobs = [];
     
     // now is already a number from Date.now(), not a Date object
-    // So we compare directly without calling .getTime()
     const nowTime = typeof now === 'number' ? now : now.getTime();
     
     // Find all scheduled times <= now
@@ -106,6 +115,11 @@ export class JobStore {
         this.scheduled.delete(execTime);
       }
     }
+    
+    if (dueJobs.length > 0) {
+      console.log(`[JobStore] Found ${dueJobs.length} due job(s): ${dueJobs.map(j => j.id).join(', ')}`);
+    }
+    
     return dueJobs;
   }
 
@@ -113,8 +127,11 @@ export class JobStore {
     const job = this.jobs.get(jobId);
     if (job) {
       job.status = status;
+      console.log(`[JobStore] Job ${jobId} status changed to: ${status}`);
       // Mirror to Redis
       await this.persistentStore.updateJobStatus(jobId, status);
+    } else {
+      console.warn(`[JobStore] Job ${jobId} not found in memory`);
     }
   }
   
@@ -125,12 +142,22 @@ export class JobStore {
       job.executedAt = executedAt;
       job.lastError = lastError;
       job.retryCount = retryCount;
+      console.log(`[JobStore] Job ${jobId} execution recorded (executedAt: ${new Date(executedAt).toISOString()})`);
       // Mirror to Redis
       await this.persistentStore.updateJobExecution(jobId, executedAt, lastError, retryCount);
+    } else {
+      console.warn(`[JobStore] Job ${jobId} not found in memory`);
     }
   }
   
   async removeJob(jobId) {
+    const job = this.jobs.get(jobId);
+    if (job) {
+      console.log(`[JobStore] Removing completed job ${jobId}`);
+    } else {
+      console.warn(`[JobStore] Job ${jobId} not found in memory for removal`);
+    }
+    
     this.jobs.delete(jobId);
     
     // Clean up scheduled entries
@@ -151,6 +178,26 @@ export class JobStore {
   
   // Get handler function from registry for a job
   getHandlerForJob(job) {
-    return this.handlerRegistry.get(job.handlerName);
+    const handler = this.handlerRegistry.get(job.handlerName);
+    if (!handler) {
+      throw new Error(`Handler "${job.handlerName}" not found for job ${job.id}`);
+    }
+    return handler;
+  }
+  
+  // Get all jobs (for debugging)
+  getAllJobs() {
+    return Array.from(this.jobs.values());
+  }
+  
+  // Get pending jobs count
+  getPendingCount() {
+    let count = 0;
+    for (const job of this.jobs.values()) {
+      if (job.status === 'pending') {
+        count++;
+      }
+    }
+    return count;
   }
 }
