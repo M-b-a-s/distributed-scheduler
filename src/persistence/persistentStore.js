@@ -8,15 +8,19 @@ async function getClient() {
     client = createClient({ url: 'redis://localhost:6379' });
     
     client.on('error', (err) => {
-      console.error('[PersistentStore] Redis Client Error:', err.message);
+      console.error('🔴 [Redis] Client Error:', err.message);
     });
     
     client.on('connect', () => {
-      console.log('[PersistentStore] Redis client connected');
+      console.log('🟢 [Redis] Connected');
+    });
+    
+    client.on('ready', () => {
+      console.log('🟢 [Redis] Ready to accept commands');
     });
     
     client.on('reconnecting', () => {
-      console.log('[PersistentStore] Redis client reconnecting...');
+      console.log('🟡 [Redis] Reconnecting...');
     });
     
     await client.connect();
@@ -32,7 +36,6 @@ function safeJsonParse(str, fallback = null) {
   try {
     return JSON.parse(str);
   } catch (e) {
-    console.warn(`[PersistentStore] Failed to parse JSON: ${str}`);
     return fallback;
   }
 }
@@ -47,7 +50,7 @@ export class PersistentStore {
       await getClient();
       this.initialized = true;
     } catch (error) {
-      console.error('[PersistentStore] Failed to connect to Redis:', error.message);
+      console.error('🔴 [PersistentStore] Failed to connect to Redis:', error.message);
       throw error;
     }
   }
@@ -75,10 +78,9 @@ export class PersistentStore {
         retryCount: (json.retryCount || 0).toString()
       };
       
-      // Use HMSET to store all fields at once
+      // Use pipeline for atomic operations
       const pipeline = client.multi();
       
-      // Add all fields using hSet one by one in the pipeline
       for (const [field, value] of Object.entries(jobData)) {
         pipeline.hSet(jobKey, field, value);
       }
@@ -88,9 +90,8 @@ export class PersistentStore {
       
       await pipeline.exec();
       
-      console.log(`[PersistentStore] Saved job ${job.id} (handler: ${json.handlerName})`);
     } catch (error) {
-      console.error(`[PersistentStore] Failed to save job ${job.id}:`, error.message);
+      console.error(`🔴 [PersistentStore] Failed to save job ${job.id}:`, error.message);
       throw error;
     }
   }
@@ -101,11 +102,8 @@ export class PersistentStore {
       const jobIds = await client.keys('job:*');
       
       if (jobIds.length === 0) {
-        console.log('[PersistentStore] No jobs found in Redis');
         return [];
       }
-      
-      console.log(`[PersistentStore] Found ${jobIds.length} job(s) in Redis`);
       
       const jobs = [];
       for (const key of jobIds) {
@@ -113,7 +111,6 @@ export class PersistentStore {
         
         // Skip if no data or missing required fields
         if (!data || !data.id || !data.schedule) {
-          console.warn(`[PersistentStore] Skipping invalid job: ${key}`);
           continue;
         }
         
@@ -136,7 +133,6 @@ export class PersistentStore {
         jobs.push(job);
       }
       
-      console.log(`[PersistentStore] Successfully loaded ${jobs.length} job(s)`);
       return jobs;
     } catch (error) {
       console.error('[PersistentStore] Failed to get all jobs:', error.message);
@@ -188,7 +184,6 @@ export class PersistentStore {
     try {
       await this.ensureConnection();
       await client.hSet(`job:${id}`, 'status', status);
-      console.log(`[PersistentStore] Updated job ${id} status to: ${status}`);
     } catch (error) {
       console.error(`[PersistentStore] Failed to update job ${id} status:`, error.message);
     }
@@ -203,7 +198,6 @@ export class PersistentStore {
         lastError: lastError || '',
         retryCount: retryCount.toString()
       });
-      console.log(`[PersistentStore] Updated job ${id} execution (completed)`);
     } catch (error) {
       console.error(`[PersistentStore] Failed to update job ${id} execution:`, error.message);
     }
@@ -216,7 +210,6 @@ export class PersistentStore {
         .del(`job:${id}`)
         .zRem('scheduled_jobs', id)
         .exec();
-      console.log(`[PersistentStore] Removed job ${id}`);
     } catch (error) {
       console.error(`[PersistentStore] Failed to remove job ${id}:`, error.message);
     }

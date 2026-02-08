@@ -14,7 +14,11 @@ export class JobStore {
   }
 
   async init() {
-    console.log('[JobStore] Initializing...');
+    console.log('\n╔═══════════════════════════════════════════════════════════════╗');
+    console.log('║                   JOB STORE INITIALIZING                    ║');
+    console.log('╚═══════════════════════════════════════════════════════════════╝\n');
+    
+    console.log('📖 Loading jobs from Redis...');
     const loadedJobs = await this.persistentStore.getAllJobs();
     
     for (const job of loadedJobs) {
@@ -33,26 +37,38 @@ export class JobStore {
     }
     
     // Log scheduled jobs summary
-    console.log(`\n=== SCHEDULED JOBS (${loadedJobs.length} total) ===`);
-    const now = Date.now();
-    for (const [execTime, jobIds] of this.scheduled.entries()) {
-      const readableTime = formatTime(execTime);
-      const isPast = execTime <= now;
-      const status = isPast ? 'DUE NOW' : 'PENDING';
-      console.log(`[${status}] ${readableTime} - ${jobIds.length} job(s): ${jobIds.join(', ')}`);
-    }
+    console.log('\n┌─────────────────────────────────────────────────────────────┐');
+    console.log('│                   SCHEDULED JOBS                            │');
+    console.log('├─────────────────────────────────────────────────────────────┤');
     
-    const nextRun = this.scheduled.keys().next().value;
-    if (nextRun) {
-      const msUntil = nextRun - Date.now();
-      if (msUntil > 0) {
-        console.log(`\nNext job runs in: ${(msUntil / 1000).toFixed(1)} seconds\n`);
-      } else {
-        console.log(`\nJobs are due for execution!\n`);
+    if (loadedJobs.length === 0) {
+      console.log('│  No jobs scheduled                                          │');
+    } else {
+      const now = Date.now();
+      for (const [execTime, jobIds] of this.scheduled.entries()) {
+        const readableTime = formatTime(execTime);
+        const isPast = execTime <= now;
+        const status = isPast ? '🔴 DUE NOW' : '🟡 PENDING';
+        const timeUntil = execTime > now ? ` (in ${Math.ceil((execTime - now) / 1000)}s)` : '';
+        console.log(`│  ${status} ${readableTime}${timeUntil.padEnd(20)} │ ${jobIds.join(', ')}`);
       }
     }
     
-    console.log('[JobStore] Initialization complete');
+    console.log('└─────────────────────────────────────────────────────────────┘\n');
+    
+    if (loadedJobs.length > 0) {
+      const nextRun = this.scheduled.keys().next().value;
+      if (nextRun) {
+        const msUntil = nextRun - Date.now();
+        if (msUntil > 0) {
+          console.log(`⏱️  Next job scheduled in: ${(msUntil / 1000).toFixed(1)} seconds\n`);
+        } else {
+          console.log(`⚡ Jobs are due for execution!\n`);
+        }
+      }
+    }
+    
+    console.log('✅ Job Store initialized successfully\n');
   }
   
   async addJob(job) {
@@ -116,10 +132,6 @@ export class JobStore {
       }
     }
     
-    if (dueJobs.length > 0) {
-      console.log(`[JobStore] Found ${dueJobs.length} due job(s): ${dueJobs.map(j => j.id).join(', ')}`);
-    }
-    
     return dueJobs;
   }
 
@@ -127,11 +139,8 @@ export class JobStore {
     const job = this.jobs.get(jobId);
     if (job) {
       job.status = status;
-      console.log(`[JobStore] Job ${jobId} status changed to: ${status}`);
       // Mirror to Redis
       await this.persistentStore.updateJobStatus(jobId, status);
-    } else {
-      console.warn(`[JobStore] Job ${jobId} not found in memory`);
     }
   }
   
@@ -142,22 +151,12 @@ export class JobStore {
       job.executedAt = executedAt;
       job.lastError = lastError;
       job.retryCount = retryCount;
-      console.log(`[JobStore] Job ${jobId} execution recorded (executedAt: ${new Date(executedAt).toISOString()})`);
       // Mirror to Redis
       await this.persistentStore.updateJobExecution(jobId, executedAt, lastError, retryCount);
-    } else {
-      console.warn(`[JobStore] Job ${jobId} not found in memory`);
     }
   }
   
   async removeJob(jobId) {
-    const job = this.jobs.get(jobId);
-    if (job) {
-      console.log(`[JobStore] Removing completed job ${jobId}`);
-    } else {
-      console.warn(`[JobStore] Job ${jobId} not found in memory for removal`);
-    }
-    
     this.jobs.delete(jobId);
     
     // Clean up scheduled entries

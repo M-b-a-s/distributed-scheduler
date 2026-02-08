@@ -2,7 +2,37 @@ import { JobStore } from '../store/jobStore.js';
 import { Scheduler } from '../scheduler/scheduler.js';
 import { defaultRegistry } from '../registry/handlerRegistry.js';
 
-console.log('=== DISTRIBUTED SCHEDULER DEMO ===\n');
+// Enhanced handler that returns results
+defaultRegistry.register('demoHandler', async (data) => {
+  console.log(`\n🎯 [HANDLER] demoHandler executing with data:`, JSON.stringify(data));
+  
+  // Simulate work (e.g., API call, database operation)
+  await new Promise(resolve => setTimeout(resolve, 2000));
+  
+  // Return a result
+  return {
+    success: true,
+    processed: data.count || 1,
+    timestamp: new Date().toISOString()
+  };
+});
+
+defaultRegistry.register('longRunningHandler', async (data) => {
+  console.log(`\n🎯 [HANDLER] longRunningHandler executing with data:`, JSON.stringify(data));
+  
+  // Simulate long-running task
+  await new Promise(resolve => setTimeout(resolve, 5000));
+  
+  return {
+    success: true,
+    task: 'long-running',
+    completedAt: new Date().toISOString()
+  };
+});
+
+console.log('\n╔═══════════════════════════════════════════════════════════════╗');
+console.log('║           DISTRIBUTED SCHEDULER - DEMO MODE                 ║');
+console.log('╚═══════════════════════════════════════════════════════════════╝\n');
 
 // Create store and scheduler with handler registry
 const store = new JobStore(defaultRegistry);
@@ -14,25 +44,32 @@ await store.init();
 // Start the scheduler
 scheduler.start();
 
-console.log('\n--- Scheduling 3 demo jobs ---\n');
+console.log('\n📋 Available handlers:', defaultRegistry.keys());
+console.log('\n' + '='.repeat(70));
+console.log('SCHEDULING DEMO JOBS');
+console.log('='.repeat(70));
 
-// Schedule some jobs using handler NAMES (not functions)
-// Jobs will execute after their delays
-scheduler.scheduleJob('consoleHandler', 3000, { message: 'Job 1: First job executing after 3 seconds!' });
-scheduler.scheduleJob('consoleHandler', 6000, { message: 'Job 2: Second job executing after 6 seconds!' });
-scheduler.scheduleJob('consoleHandler', 9000, { message: 'Job 3: Third job executing after 9 seconds!' });
+// Schedule demo jobs
+const job1Id = scheduler.scheduleJob('demoHandler', 3000, { 
+  message: 'First demo job', 
+  count: 42 
+});
 
-console.log('\n--- Demo jobs scheduled successfully ---');
-console.log('Jobs will execute at:');
-console.log('  - Job 1: ~3 seconds');
-console.log('  - Job 2: ~6 seconds');
-console.log('  - Job 3: ~9 seconds');
-console.log('\nWatch for execution messages below...\n');
+const job2Id = scheduler.scheduleJob('longRunningHandler', 8000, { 
+  message: 'Long-running job',
+  taskId: 'TASK-001'
+});
+
+console.log('\n⏰ Jobs will execute in:');
+console.log('   • job1 (~3 seconds): First demo job');
+console.log('   • job2 (~8 seconds): Long-running job');
+console.log('\n👀 Watch the console below for execution logs...\n');
+console.log('─'.repeat(70));
 
 // Stop scheduler after 15 seconds
 setTimeout(() => {
-  console.log('\n--- Demo complete ---');
+  console.log('\n' + '─'.repeat(70));
+  console.log('\n⏹️  Demo complete - stopping scheduler...\n');
   scheduler.stop();
-  console.log('Scheduler stopped.');
   process.exit(0);
 }, 15000);
