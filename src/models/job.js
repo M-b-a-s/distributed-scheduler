@@ -21,6 +21,49 @@ export class Job {
     this.retryCount = 0;
   }
   
+  // ============================================
+  // Recurring Job Helper Methods
+  // ============================================
+  
+  /**
+   * Check if this job is configured as a recurring job
+   * @returns {boolean}
+   */
+  isRecurring() {
+    return this.recurring === true && !!this.cronExpression;
+  }
+  
+  /**
+   * Check if this job should be rescheduled after execution
+   * @returns {boolean}
+   */
+  shouldReschedule() {
+    return this.isRecurring();
+  }
+  
+  /**
+   * Reset job state for the next execution cycle
+   */
+  resetForNextRun() {
+    this.status = 'pending';
+    this.executedAt = null;
+    this.lastError = null;
+    this.retryCount = 0;
+  }
+  
+  /**
+   * Get a human-readable description of the schedule
+   * @returns {string}
+   */
+  getScheduleDescription() {
+    if (this.isRecurring()) {
+      return `Recurring: ${this.cronExpression}`;
+    } else if (this.schedule instanceof Date) {
+      return `One-time: ${this.schedule.toISOString()}`;
+    }
+    return `Schedule: ${this.schedule}`;
+  }
+  
   // Convert to serializable object (pure data, no functions)
   toJSON() {
     return {

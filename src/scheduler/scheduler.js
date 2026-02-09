@@ -1,4 +1,5 @@
 import { Job } from '../models/job.js';
+import { getNextExecutionTime } from '../utils/cronUtils.js';
 
 // Helper for consistent timestamp format
 function timestamp() {
@@ -106,11 +107,19 @@ export class Scheduler {
       
       logJobEvent('COMPLETED', job, `| Duration: ${executionTime}ms${resultPreview}`);
       
-      // Remove completed job
-      await this.store.removeJob(job.id);
-      
-      // Log job removal
-      console.log(`🗑️  [${timestamp()}] [REMOVED] Job ${job.id} removed from queue`);
+      // Handle recurring jobs - reschedule instead of removing
+      if (job.shouldReschedule()) {
+        const nextExecutionTime = getNextExecutionTime(job.cronExpression);
+        job.resetForNextRun();
+        job.schedule = new Date(nextExecutionTime);
+        
+        await this.store.addJob(job);
+        console.log(`🔄 [${timestamp()}] [RESCHEDULED] Job: ${job.id} | Next: ${new Date(nextExecutionTime).toLocaleString()}`);
+      } else {
+        // Remove completed one-time job
+        await this.store.removeJob(job.id);
+        console.log(`🗑️  [${timestamp()}] [REMOVED] Job ${job.id} removed from queue`);
+      }
       
     } catch (error) {
       // Calculate execution time before error
@@ -161,6 +170,34 @@ export class Scheduler {
     
     console.log('\n' + '─'.repeat(70));
     logJobEvent('SCHEDULED', job, `| Execute in: ${timeUntilExecute} | Data: ${JSON.stringify(data).substring(0, 50)}`);
+    console.log('─'.repeat(70));
+    
+    return jobId;
+  }
+  
+  scheduleRecurringJob(handlerName, cronExpression, data = {}) {
+    // Generate unique ID for recurring job
+    const jobId = `recurring-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    
+    // Calculate first execution time from cron expression
+    const nextExecutionTime = getNextExecutionTime(cronExpression);
+    
+    // Create job with recurring flag
+    const job = new Job(jobId, nextExecutionTime, handlerName, data, {
+      recurring: true,
+      cronExpression: cronExpression
+    });
+    
+    // Add to store
+    this.store.addJob(job);
+    
+    // Log scheduling
+    console.log('\n' + '─'.repeat(70));
+    console.log(`📅 [${timestamp()}] [RECURRING] Job: ${jobId}`);
+    console.log(`   │ Handler: ${handlerName}`);
+    console.log(`   │ Cron: ${cronExpression}`);
+    console.log(`   │ First execution: ${new Date(nextExecutionTime).toLocaleString()}`);
+    console.log(`   │ Data: ${JSON.stringify(data).substring(0, 50)}`);
     console.log('─'.repeat(70));
     
     return jobId;
