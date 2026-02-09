@@ -1,4 +1,4 @@
-import parser from 'cron-parser';
+import { CronExpressionParser } from 'cron-parser';
 
 /**
  * Validate a cron expression
@@ -10,7 +10,7 @@ export function validateCronExpression(expression) {
     return false;
   }
   try {
-    parser.parseExpression(expression);
+    CronExpressionParser.parse(expression);
     return true;
   } catch (err) {
     return false;
@@ -33,9 +33,9 @@ export function getNextExecutionTime(cronExpression, fromTime = Date.now()) {
       currentDate: new Date(fromTime),
       iterator: true
     };
-    const interval = parser.parseExpression(cronExpression, options);
+    const interval = CronExpressionParser.parse(cronExpression, options);
     const next = interval.next();
-    return next.value.getTime();
+    return next.getTime();
   } catch (err) {
     throw new Error(`Invalid cron expression: ${cronExpression}. ${err.message}`);
   }
@@ -63,11 +63,11 @@ export function getNextExecutionTimes(cronExpression, count, fromTime = Date.now
       currentDate: new Date(fromTime),
       iterator: true
     };
-    const interval = parser.parseExpression(cronExpression, options);
+    const interval = CronExpressionParser.parse(cronExpression, options);
     
     for (let i = 0; i < count; i++) {
       const next = interval.next();
-      times.push(next.value.getTime());
+      times.push(next.getTime());
     }
   } catch (err) {
     throw new Error(`Invalid cron expression: ${cronExpression}. ${err.message}`);
@@ -82,11 +82,11 @@ export function getNextExecutionTimes(cronExpression, count, fromTime = Date.now
  */
 export function describeCronExpression(cronExpression) {
   try {
-    const interval = parser.parseExpression(cronExpression);
+    const interval = CronExpressionParser.parse(cronExpression);
     const next = interval.next();
     const prev = interval.prev();
     
-    return `Next: ${next.value.toISOString()}, Previous: ${prev.value.toISOString()}`;
+    return `Next: ${next.toISOString()}, Previous: ${prev.toISOString()}`;
   } catch (err) {
     return `Invalid cron expression: ${err.message}`;
   }
