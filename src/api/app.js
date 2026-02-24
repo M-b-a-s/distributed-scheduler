@@ -1,5 +1,6 @@
 import express from "express";
 import cors from "cors";
+import errorHandler, { notFoundHandler } from "./middlewares/errorHandler.js";
 
 const app = express();
 
@@ -16,5 +17,11 @@ app.use(cors({
 app.get("/", (req, res) => {
     res.send("Hello from the Distributed Scheduler API!");
 });
+
+// 404 handler for unknown routes (must be after all routes)
+app.use(notFoundHandler);
+
+// Global error handler (must be last)
+app.use(errorHandler);
 
 export default app;
